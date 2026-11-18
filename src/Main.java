@@ -4,8 +4,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Kateryna
@@ -77,18 +75,18 @@ public class Main {
         }
 
         String body = response.body();
-        // Only look at the first forecast entry (the next 3 hours)
+        // Only look at the first forecast entry the next 3 hours
         int start = body.indexOf("\"list\":[");
         int end = body.indexOf("\"dt_txt\"", start);
         String first = body.substring(start, end);
 
-        String time = extractValue(body, "\"dt_txt\":\"([^\"]+)\"");
-        double temp = toDouble(extractValue(first, "\"temp\":(-?[0-9.]+)"));
-        double wind = toDouble(extractValue(first, "\"speed\":([0-9.]+)"));
-        double visibility = toDouble(extractValue(first, "\"visibility\":([0-9]+)"));
-        double rain = toDouble(extractValue(first, "\"rain\":\\{\"3h\":([0-9.]+)"));
-        double snow = toDouble(extractValue(first, "\"snow\":\\{\"3h\":([0-9.]+)"));
-        String description = extractValue(first, "\"description\":\"([^\"]+)\"");
+        String time = getValue(body, "dt_txt");
+        double temp = toDouble(getValue(first, "temp"));
+        double wind = toDouble(getValue(first, "speed"));
+        double visibility = toDouble(getValue(first, "visibility"));
+        double rain = getPrecipitation(first, "rain");
+        double snow = getPrecipitation(first, "snow");
+        String description = getValue(first, "description");
 
         System.out.println("    Road Risk Forecast: " + location.name() + " (" + time + " )");
         System.out.println("Weather       : " + description);
@@ -112,9 +110,30 @@ public class Main {
         return "LOW - normal driving conditions";
     }
 
-    String extractValue(String json, String regex) {
-        Matcher matcher = Pattern.compile(regex).matcher(json);
-        return matcher.find() ? matcher.group(1) : "N/A";
+    // "{\"temp\":5.51,\"humidity\":90}" example
+    String getValue(String json, String key) {
+        String search = "\"" + key + "\":";
+        int start = json.indexOf(search);
+        if (start == -1) return "N/A";         
+        start = start + search.length();    
+
+        // read until the closing quote
+        if (json.charAt(start) == '"') {
+            int end = json.indexOf('"', start + 1);
+            return json.substring(start + 1, end);
+        }
+
+        int end = start;
+        while (json.charAt(end) != ',' && json.charAt(end) != '}') {
+            end++;
+        }
+        return json.substring(start, end);
+    }
+
+    double getPrecipitation(String json, String type) {
+        int pos = json.indexOf("\"" + type + "\":{");
+        if (pos == -1) return 0;
+        return toDouble(getValue(json.substring(pos), "3h"));
     }
 
     double toDouble(String value) {
